@@ -59,6 +59,7 @@ function fetchO() {
   request.get(O_DAN_URL, function (error, response, body) {
     if (!error && response.statusCode == 200) {
         O_DAN = body;
+		console.log("DAN: " + O_DAN.split('\n')[0]);
     }
   });
 
@@ -101,6 +102,7 @@ function reqRes(conversationLog, model) {
         if(error.toString().includes("400")) { return 400; }
         console.log(`OPENAI ERROR: ${error}`);
 		tasks[ctask].errors.push(error.toString());
+		tasks[ctask].finished = true;
       });
 }
 
@@ -113,6 +115,9 @@ client.on('messageCreate', (message) => {
   if(message.content === "!update") {
 	fetchO();
 	message.channel.send("Re-Fetched GitHub definitions!");
+  }
+  if(message.content === "!version") {
+	message.channel.send("DAN version: " + O_DAN.split('\n')[0]);
   }
   if(message.content === "!tasks") {
 	var sa = "Active Tasks:\n";
@@ -134,7 +139,11 @@ client.on('messageCreate', (message) => {
 			}
 		}
 	});
-	message.channel.send(sa + "\n" + sf + "...");
+	if(sfc == 0) {
+		message.channel.send(sa);
+	} else {
+		message.channel.send(sa + "\n" + sf + "...");
+	}
   }
   if(message.content.startsWith("!tskill")) {
 	if(message.member.permissionsIn(message.channel).has("ADMINISTRATOR")) {
@@ -177,6 +186,7 @@ client.on('messageCreate', async (message) => {
     conversationLog.push({ role: 'system', content: O_MC, });
 
     if(O_TNT == "EMPTY => ERROR") {
+		await fetchO();
       throw new Error("O_TNT EMPTY");
     }
 
