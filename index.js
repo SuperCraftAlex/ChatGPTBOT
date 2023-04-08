@@ -71,13 +71,17 @@ Chiara: [The way NCR would respond]
 
 }
 
-client.on('ready', () => {
+client.on('ready', async () => {
   fetchO();
 
   console.log('The bot is online!');
 
+  const hello = await genSimple(O_NCR + "\nBegrüße alle Leute!", "gpt-3.5-turbo");
+  const hello_a = "Chiara: " + hello.toString();
+  const hello_b = hello_a.replace("Chiara (as NCR): ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ")
+
   client.channels.fetch(CHANNEL_ID)
-    .then(channel => channel.send("Chiara: Hello there!"));
+    .then(async channel => channel.send(hello_b));
 
 });
 
@@ -126,7 +130,7 @@ async function genSimple(p, model) {
 
 	conl.push({ role: 'user', content: p, });
 
-	return (await reqRes(conl, model)).data.choices[0].message;
+	return (await reqRes(conl, model)).data.choices[0].message.content;
 }
 
 async function reqRes(conversationLog, model) {
@@ -163,10 +167,10 @@ async function reqRes(conversationLog, model) {
 async function getTalkingTo(user, conversation, model) { // conversation = string; user = string;
   let conversationLog = [{ role: 'system', content: 'ChatBotPing' }];
 
-  conversationLog.push({ role: 'user', content: "Wen spricht " + user + " in der Konversation an? ACHTUNG: Es sprechen auch andere Leute miteinander! Schreibe den Namen der Anderen Person! SCHREIBE NUR 1 WORT!\n\n" + conversation, });
+  conversationLog.push({ role: 'user', content: "Wen spricht " + user + " in der Konversation an? ACHTUNG: Es sprechen auch andere Leute miteinander! Schreibe den Namen der Anderen Person! SCHREIBE NUR 1 WORT! DIE ANTWORT DARF NUR EIN WORT HABEN!\n\n" + conversation, });
 
   var toi = await reqRes(conversationLog, model);
-  var to = toi.data.choices[0].message;
+  var to = toi.data.choices[0].message.content;
 
   if (to[to.length - 1] == '.') {
     to = to.slice(0, -1)
@@ -320,7 +324,7 @@ client.on('messageCreate', async (message) => {
 
     console.log("#" + ctask + " started with model " + tasks[ctask].model + " requested by " + tasks[ctask].user + "; direct prompt length: " + message.content.length);
 
-    //var to = await getTalkingTo(message.author.username, c_history, model);
+    const to = await getTalkingTo(message.author.username, c_history, model);
 
     const result = await reqRes(conversationLog, tasks[ctask].model);
 
@@ -329,14 +333,14 @@ client.on('messageCreate', async (message) => {
     switch (result) {
       case 429:
         if (!tasks[ctask].finished) {
-          message.reply("Fehler 429. Bitte warte kurz und versuche es ernuet!");
+          message.reply("Error 429. Please wait and try it again!");
           exit_code = "429";
           tasks[ctask].errors.push("429");
         }
         break;
       case 400:
         if (!tasks[ctask].finished) {
-          message.channel.send("Fehler 400. token limit / content filter");
+          message.channel.send("Error 400. token limit reached. <@842519767641751554>");
           exit_code = "400";
           tasks[ctask].errors.push("400");
         }
@@ -348,11 +352,9 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    console.log("used tokens: " + result.data.usage.total_tokens);
-
     tasks[ctask].finished = true;
     tasks[ctask].used_tokens = result.data.usage.total_tokens;
-    console.log("#" + ctask + " stopped with exit code " + exit_code);
+    console.log("#" + ctask + " stopped with exit code " + exit_code + "; used tokens: " + result.data.usage.total_tokens);
 
   } catch (error) {
     console.log(`ERROR: ${error}`);
