@@ -77,7 +77,7 @@ client.on('ready', () => {
   console.log('The bot is online!');
 
   client.channels.fetch(CHANNEL_ID)
-    .then(channel => channel.send("Hello!"));
+    .then(channel => channel.send("Chiara: Hello there!"));
 
 });
 
@@ -119,6 +119,14 @@ function reqRes_2(conversationLog, model) {
       tasks[ctask].errors.push(error.toString());
       tasks[ctask].finished = true;
     });
+}
+
+async function genSimple(p, model) {
+	let conl = [{ role: 'system', content: 'ChatBotPing' }];
+
+	conl.push({ role: 'user', content: p, });
+
+	return (await reqRes(conl, model)).data.choices[0].message;
 }
 
 async function reqRes(conversationLog, model) {
@@ -229,6 +237,15 @@ client.on('messageCreate', (message) => {
       message.channel.send("You dont have permissions to execute that command!");
     }
   }
+  if (message.content.startsWith("!tokens")) {
+    var total = 0;
+
+    tasks.forEach((item, index) => {
+      total += item.used_tokens;
+    });
+
+    message.channel.send("Tokens used since start: "+total+"\n =Money wasted: "+(0.002*(total/1000)).toFixed(4)+"$");
+  }
 
 });
 
@@ -242,7 +259,7 @@ client.on('messageCreate', async (message) => {
   let conversationLog = [{ role: 'system', content: 'ChatBotPing' }];
 
   try {
-    let prevMessages = await message.channel.messages.fetch({ limit: 15 });
+    let prevMessages = await message.channel.messages.fetch();
     prevMessages.reverse();
 
     if (O_NCR == "EMPTY => ERROR") {
@@ -326,7 +343,7 @@ client.on('messageCreate', async (message) => {
         break;
       default:
         if (!tasks[ctask].finished) {
-          message.reply(result.data.choices[0].message.content.replace("Chiara (as NCR): ", "Chiara: ")).catch((error) => { console.log(`DC ERR: ${error}`); });
+          message.reply(result.data.choices[0].message.content.replace("Chiara (as NCR): ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ")).catch((error) => { console.log(`DC ERR: ${error}`); });
           exit_code = "0";
         }
     }
