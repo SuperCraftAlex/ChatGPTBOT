@@ -76,9 +76,9 @@ client.on('ready', async () => {
 
   console.log('The bot is online!');
 
-  const hello = await genSimple(O_NCR + "\nBegrüße alle Leute!", "gpt-3.5-turbo");
+  const hello = await genSimple(O_NCR + "\nSay hello to everyone!", "gpt-3.5-turbo");
   const hello_a = "Chiara: " + hello.toString();
-  const hello_b = hello_a.replace("Chiara (as NCR): ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ")
+  const hello_b = hello_a.replace("Chiara (as NCR): ", "Chiara: ").replace("NCR: ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ")
 
   client.channels.fetch(CHANNEL_ID)
     .then(async channel => channel.send(hello_b));
@@ -287,7 +287,7 @@ client.on('messageCreate', async (message) => {
           content: "Chiara: " + req,
         });
 
-		var c = msg.content.replace("Chiara (as NCR): ", "Chiara: ");
+		var c = msg.content.replace("Chiara (as NCR): ", "Chiara: ").replace("NCR: ", "Chiara: ");
 		
         if (!c.startsWith("Chiara: ")) {
           c_history += "Chiara: ";
@@ -324,7 +324,7 @@ client.on('messageCreate', async (message) => {
 
     console.log("#" + ctask + " started with model " + tasks[ctask].model + " requested by " + tasks[ctask].user + "; direct prompt length: " + message.content.length);
 
-    const to = await getTalkingTo(message.author.username, c_history, model);
+    // const to = await getTalkingTo(message.author.username, c_history, model);
 
     const result = await reqRes(conversationLog, tasks[ctask].model);
 
@@ -347,7 +347,7 @@ client.on('messageCreate', async (message) => {
         break;
       default:
         if (!tasks[ctask].finished) {
-          message.reply(result.data.choices[0].message.content.replace("Chiara (as NCR): ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ")).catch((error) => { console.log(`DC ERR: ${error}`); });
+          message.reply(result.data.choices[0].message.content.replace("Chiara (as NCR): ", "Chiara: ").replace("NCR: ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ")).catch((error) => { console.log(`DC ERR: ${error}`); });
           exit_code = "0";
         }
     }
