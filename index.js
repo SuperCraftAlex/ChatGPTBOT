@@ -5,12 +5,14 @@ require('dotenv').config();
 const { Client, IntentsBitField } = require('discord.js');
 const { Configuration, OpenAIApi } = require('openai');
 const request = require('request');
+const fs = require('fs');
 
 const lib = require("./lib");
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const CHANNEL_SUM_ID = process.env.CHANNEL__SUM_ID;
+const CHANNEL_SUM_ID = process.env.CHANNEL_SUM_ID;
+const CHANNEL_DEBUG_ID = process.env.CHANNEL_DEBUG_ID;
 const API_KEY_1 = process.env.API_KEY_1;
 const API_KEY_2 = process.env.API_KEY_2;
 
@@ -74,8 +76,14 @@ RTM is a 21 years old woman named Chiara. RTM is very attraktive and knows that.
   C_CHIARA = new lib.Character("Chiara", C_CHIARA_T, "lib.Character/memory/Chiara.txt")
 }
 
-function findMessageStartingWith(channel, x) {
-
+async function getSummarry(messageid){
+  let prevMessages = await client.channels.cache.get(CHANNEL_SUM_ID).messages.fetch();
+  prevMessages.reverse();
+  prevMessages.forEach((msg) => {
+    if(msg.content.startsWith(messageid+"@")) {
+      return msg.content.replace(messageid+"@","SUMMARY: ");
+    }
+  });
 }
 
 function summary(t) { // returns: [ message_main:String, message_summary:String]
@@ -186,7 +194,9 @@ async function genSimple(p, model) {
 
 	conl.push({ role: 'user', content: p, });
 
-	return (await reqRes(conl, model)).data.choices[0].message.content;
+    try {
+      return (await reqRes(conl, model)).data.choices[0].message.content;
+    } catch (e) { return "Error: probably 429"; }
 }
 
 async function reqRes(conversationLog, model) {
@@ -235,10 +245,6 @@ async function getTalkingTo(user, conversation, model) { // conversation = strin
   console.log("Talking to " + to);
 
   return to;
-}
-
-function formatNumber(number) {
-  return number < 10 ? `0${number}` : number;
 }
 
 client.on('messageCreate', (message) => {
@@ -325,6 +331,7 @@ client.on('messageCreate', async (message) => {
   if (message.channel.id !== CHANNEL_ID) return;
   if (message.content.startsWith('//')) return;
   if (message.content.startsWith('!')) return;
+  if (message.content.startsWith('SYSTEM: ')) return;
 
   let conversationLog = [{ role: 'system', content: 'ChatBotPing' }];
 
@@ -349,13 +356,21 @@ client.on('messageCreate', async (message) => {
       const formattedDate = dtformat(date)[0];
       const formattedTime = dtformat(date)[1];
 
-      if (msg.author.bot) {
+      if(msg.content.startsWith("SYTSEM: ")) {
+        var m = msg.content.replace("SYSTEM: ","");
+
+        conversationLog.push({
+          role: 'system',
+          content: m,
+        });
+      }
+      else if (msg.author.bot) {
         var req = msg.content;
 
         //TODO: REPLY?
         conversationLog.push({
           role: 'assistant',
-          content: currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): " + req,
+          content: currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): " + req + "\n" + getSummarry(msg.id),
         });
 
 		var c = remGPT(msg.content);
@@ -363,7 +378,7 @@ client.on('messageCreate', async (message) => {
         if (!c.startsWith(currentCharacter().name+": ")) {
           c_history += currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): ";
         }
-        c_history += c + "\n";
+        c_history += c + "\n\n" + getSummarry(msg.id);
       }
       else if (message !== msg) {
         var req = msg.content;
@@ -432,6 +447,8 @@ client.on('messageCreate', async (message) => {
           var exit_code = "0";
         }
     }
+
+    client.channels.cache.get(CHANNEL_DEBUG_ID).send("#"+ctask+" exit code: "+exit_code+" Response:\n```"+JSON.stringify(result.data)+"```").catch(function (){});
 
     tasks[ctask].finished = true;
     tasks[ctask].used_tokens = result.data.usage.total_tokens;
