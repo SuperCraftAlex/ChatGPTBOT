@@ -5,7 +5,6 @@ require('dotenv').config();
 const { Client, IntentsBitField } = require('discord.js');
 const { Configuration, OpenAIApi } = require('openai');
 const request = require('request');
-const fs = require('fs');
 
 const lib = require("./lib");
 
@@ -70,7 +69,7 @@ function fetchO(callback) {
   });
 
   const C_CHIARA_T = `v0
-RTM is a 21 years old woman named Chiara. RTM is very attraktive and knows that. RTM is hot, likes Boys very much and is heterosexual. RTM lives in germany in the city called Nürnberg. RTM really likes to make out and have dirty sex with other boys. RTM likes Bad Boys.
+RTM is a 21 years old woman named Chiara. RTM is very attractive and knows that. RTM is hot, likes Boys very much and is heterosexual. RTM lives in germany in the city called Nürnberg. RTM really likes to make out and have dirty sex with other boys except if it had a bad experience with them in the past. RTM likes Bad Boys.
 `;
 
   C_CHIARA = new lib.Character("Chiara", C_CHIARA_T, "lib.Character/memory/Chiara.txt")
@@ -79,11 +78,14 @@ RTM is a 21 years old woman named Chiara. RTM is very attraktive and knows that.
 async function getSummarry(messageid){
   let prevMessages = await client.channels.cache.get(CHANNEL_SUM_ID).messages.fetch();
   prevMessages.reverse();
+
+  var summarries = [];
   prevMessages.forEach((msg) => {
     if(msg.content.startsWith(messageid+"@")) {
-      return msg.content.replace(messageid+"@","SUMMARY: ");
+      summarries.push(msg.content.replace(messageid+"@",""));
     }
   });
+  return "SUMMARY: "+summarries.join(";")
 }
 
 function summary(t) { // returns: [ message_main:String, message_summary:String]
@@ -119,7 +121,7 @@ function dtformat(date) { // date = Dateobject;; returns: [dateformatted, timefo
   return [formattedDate, formattedTime];
 }
 
-function rtmPlaceholders(emotions) { // emotions:[];; returns: rtm replaced:string
+function RTMPlaceholders(emotions) { // emotions:[];; returns: RTM replaced:string
   return O_RTM.replace("[date]", dtformat()[0]).replace("[time]", dtformat()[1]).replace("[emotions]", arrayToString(emotions));
 }
 
@@ -136,7 +138,7 @@ function remGPT(s) {
 client.on('ready',  async () => {
   await fetchO(async function(error, result) {
 
-    const hello = summary(await genSimple(rtmPlaceholders([]) + currentCharacter().def + "\nSay hello to everyone as "+currentCharacter().name+"!", "gpt-3.5-turbo"))[0];
+    const hello = summary(await genSimple(RTMPlaceholders([]) + currentCharacter().def + "\nSay hello to everyone as "+currentCharacter().name+"!", "gpt-3.5-turbo"))[0];
     const hello_a = currentCharacter().name+": " + hello.toString();
     const hello_b = remGPT(hello_a);
 
@@ -287,7 +289,7 @@ client.on('messageCreate', (message) => {
       message.channel.send(sa + "\n" + sf + "...");
     }
   }
-  if (message.content.startsWith("!tskill")) {
+  if (message.content.startsWith("!tskill ")) {
     if (message.member.permissionsIn(message.channel).has("ADMINISTRATOR")) {
       tasks[args[1]].finished = true;
       message.channel.send("killed task #" + args[1] + "!");
@@ -299,7 +301,9 @@ client.on('messageCreate', (message) => {
   if (message.content === "!killall") {
     if (message.member.permissionsIn(message.channel).has("ADMINISTRATOR")) {
       tasks.forEach((item, index) => {
-        item.finished = true;
+        if(item.finished === false) {
+          item.finished = true;
+        }
         console.log("#" + index + " canceled!");
       });
 
@@ -356,7 +360,7 @@ client.on('messageCreate', async (message) => {
       const formattedDate = dtformat(date)[0];
       const formattedTime = dtformat(date)[1];
 
-      if(msg.content.startsWith("SYTSEM: ")) {
+      if(msg.content.startsWith("SYTSEM: ") && msg.member.permissionsIn(msg.channel).has("ADMINISTRATOR")) {
         var m = msg.content.replace("SYSTEM: ","");
 
         conversationLog.push({
@@ -399,12 +403,12 @@ client.on('messageCreate', async (message) => {
     tasks.push(new AITask(message.author, model, currentCharacter()));
     var ctask = tasks.length - 1;
 
-    console.log("#" + ctask + " started with model " + tasks[ctask].model + " requested by " + tasks[ctask].user + "; direct prompt length: " + message.content.length);
+    console.log("#" + ctask + " started with model " + tasks[ctask].model + " requested by " + tasks[ctask].user);
 
     // const to = await getTalkingTo(message.author.username, c_history, model);
 
     // latest message
-    const l_req = rtmPlaceholders([]) + currentCharacter().def + message.content;
+    const l_req = RTMPlaceholders([]) + currentCharacter().def + message.content;
     const l_nick = message.member ? message.member.displayName : null;
     const l_date = new Date(message.createdTimestamp);
     const l_formattedDate = dtformat(l_date)[0];
@@ -448,7 +452,12 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    client.channels.cache.get(CHANNEL_DEBUG_ID).send("#"+ctask+" exit code: "+exit_code+" Response:\n```"+JSON.stringify(result.data)+"```").catch(function (){});
+    if (!tasks[ctask].finished) {
+      client.channels.cache.get(CHANNEL_DEBUG_ID).send("#" + ctask + " exit code: " + exit_code + " Response:\n```" + JSON.stringify(result.data) + "```").catch(function () {});
+    }
+    else {
+      client.channels.cache.get(CHANNEL_DEBUG_ID).send("#" + ctask + " cancelled!");
+    }
 
     tasks[ctask].finished = true;
     tasks[ctask].used_tokens = result.data.usage.total_tokens;
