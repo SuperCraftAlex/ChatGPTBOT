@@ -4,23 +4,22 @@ require('dotenv').config();
 
 const { Client, IntentsBitField } = require('discord.js');
 const { Configuration, OpenAIApi } = require('openai');
+const request = require('request');
 
-const fs = require("fs");
-const http = require("http");
-const path = require('path');
-const parseUrl = require('url').parse;
+const lib = require("./lib");
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
+const CHANNEL_SUM_ID = process.env.CHANNEL__SUM_ID;
 const API_KEY_1 = process.env.API_KEY_1;
 const API_KEY_2 = process.env.API_KEY_2;
 
 process.setMaxListeners(0);
 
-const O_RTM_URL = "http://raw.githubusercontent.com/SuperCraftAlex/SW_CHATGPT_TEXTS/main/RTM.txt";
+const O_RTM_URL = "https://raw.githubusercontent.com/SuperCraftAlex/SW_CHATGPT_TEXTS/main/RTM.txt";
 
 var O_RTM = "EMPTY => ERROR";
-var C_CHIARA = "EMPTY => ERROR";
+var C_CHIARA;
 
 var tasks = [];
 
@@ -33,15 +32,16 @@ class AITask {
   errors;
   finished;
   used_tokens;
+  character;
 
-  constructor(user, model) {
+  constructor(user, model, character) {
     this.user = user;
     this.model = model;
     this.errors = [];
     this.finished = false;
     this.used_tokens = 0;
+    this.character = character;
   }
-
 
 }
 
@@ -53,25 +53,66 @@ const client = new Client({
   ],
 });
 
-function fetchO() {
-  var request = require('request');
 
-
+function fetchO(callback) {
   request.get(O_RTM_URL, function (error, response, body) {
-    if (!error && response.statusCode == 200) {
-        O_RTM = body;
-    console.log("RTM: " + O_RTM.split('\n')[0]);
+    if (!error && response.statusCode === 200) {
+      const firstLine = body.split('\n')[0];
+      console.log("RTM: " + firstLine);
+      O_RTM = body;
+      callback(null, O_RTM);
+    } else {
+      const errorMessage = error ? `Failed to retrieve RTM: ${error}` : `Failed to retrieve RTM. Status code: ${response.statusCode}`;
+      callback(new Error(errorMessage));
     }
   });
 
-  C_CHIARA = `v0
-RTM is a 16 years old woman named Chiara. RTM is very attractive and knows that. RTM is hot, likes Boys very much and is heterosexual. RTM lives in germany in the city called Nürnberg. RTM hates Maths and Programming over everything. RTM shows its emotions and feelings with emojis after every sentence.
+  const C_CHIARA_T = `v0
+RTM is a 21 years old woman named Chiara. RTM is very attraktive and knows that. RTM is hot, likes Boys very much and is heterosexual. RTM lives in germany in the city called Nürnberg. RTM really likes to make out and have dirty sex with other boys. RTM likes Bad Boys.
 `;
+
+  C_CHIARA = new lib.Character("Chiara", C_CHIARA_T, "lib.Character/memory/Chiara.txt")
+}
+
+function findMessageStartingWith(channel, x) {
 
 }
 
-function character() {
-  return O_RTM + C_CHIARA;
+function summary(t) { // returns: [ message_main:String, message_summary:String]
+  const lines = t.split("\n");
+  const emotionsB = lines.filter((line) => line.startsWith("SUMMARY: "));
+  const summaries = [];
+  for (let emotionsBElement of emotionsB.reverse()) {
+    summaries.push(emotionsBElement.split("SUMMARY:")[1].replace(".",""));
+  }
+
+  const m = t.replace(/^SUMMARY:.*\n?/gm, '');
+
+  return [m, summaries.join("\n")];
+}
+
+function currentCharacter() {
+  return C_CHIARA;
+}
+
+function arrayToString(a) {
+  return a.join(", ");
+}
+
+function dtformat(date) { // date = Dateobject;; returns: [dateformatted, timeformatted]
+  if(date == null) {
+    return ["",""]
+  }
+  const dateOptions = { day: 'numeric', month: 'long', year: 'numeric' };
+  const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+  const formattedDate = date.toLocaleDateString('en-US', dateOptions);
+  const formattedTime = date.toLocaleTimeString('en-US', timeOptions);
+
+  return [formattedDate, formattedTime];
+}
+
+function rtmPlaceholders(emotions) { // emotions:[];; returns: rtm replaced:string
+  return O_RTM.replace("[date]", dtformat()[0]).replace("[time]", dtformat()[1]).replace("[emotions]", arrayToString(emotions));
 }
 
 function remRTM(s) {
@@ -80,21 +121,23 @@ function remRTM(s) {
 
 function remGPT(s) {
   const a = s.replace(/GPT:.*?RTM: /gs, "").replace(/GPT:.*$/, "");
-  const b = ("Chiara: "+a).replace("Chiara (as RTM): ", "Chiara: ").replace("RTM: ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ").replace("Chiara: Chiara: ", "Chiara: ");
+  const b = (currentCharacter().name+": "+a).replace(currentCharacter().name+" (as RTM): ", currentCharacter().name+": ").replace("RTM: ", currentCharacter().name+": ").replace(currentCharacter().name+": "+currentCharacter().name+": ", currentCharacter().name+": ").replace(currentCharacter().name+": "+currentCharacter().name+": ", currentCharacter().name+": ");
   return remRTM(b);
 }
 
-client.on('ready', async () => {
-  fetchO();
+client.on('ready',  async () => {
+  await fetchO(async function(error, result) {
+
+    const hello = summary(await genSimple(rtmPlaceholders([]) + currentCharacter().def + "\nSay hello to everyone as "+currentCharacter().name+"!", "gpt-3.5-turbo"))[0];
+    const hello_a = currentCharacter().name+": " + hello.toString();
+    const hello_b = remGPT(hello_a);
+
+    client.channels.fetch(CHANNEL_ID)
+        .then(async channel => channel.send(hello_b));
+
+  });
 
   console.log('The bot is online!');
-
-  const hello = await genSimple(character() + "\nSay hello to everyone!", "gpt-3.5-turbo");
-  const hello_a = "Chiara: " + hello.toString();
-  const hello_b = remGPT(hello_a);
-
-  client.channels.fetch(CHANNEL_ID)
-    .then(async channel => channel.send(hello_b));
 
 });
 
@@ -205,8 +248,9 @@ client.on('messageCreate', (message) => {
     message.channel.send("ChatGPT bot by alex_s168.");
   }
   if (message.content === "!update") {
-    fetchO();
-    message.channel.send("Re-Fetched GitHub definitions!");
+    fetchO(function(){
+      message.channel.send("Re-Fetched GitHub definitions!");
+    });
   }
   if (message.content === "!version") {
     message.channel.send("RTM version: " + O_RTM.split('\n')[0]);
@@ -246,7 +290,7 @@ client.on('messageCreate', (message) => {
       message.channel.send("You dont have permissions to execute that command!");
     }
   }
-  if (message.content.startsWith("!killall")) {
+  if (message.content === "!killall") {
     if (message.member.permissionsIn(message.channel).has("ADMINISTRATOR")) {
       tasks.forEach((item, index) => {
         item.finished = true;
@@ -258,7 +302,7 @@ client.on('messageCreate', (message) => {
       message.channel.send("You dont have permissions to execute that command!");
     }
   }
-  if (message.content.startsWith("!tokens")) {
+  if (message.content === "!tokens") {
     var total = 0;
 
     tasks.forEach((item, index) => {
@@ -269,6 +313,11 @@ client.on('messageCreate', (message) => {
   }
 
 });
+
+Array.prototype.extend = function (other_array) {
+  /* You should include a test to check whether other_array really is an array */
+  other_array.forEach(function(v) {this.push(v)}, this);
+}
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
@@ -296,7 +345,9 @@ client.on('messageCreate', async (message) => {
       if (msg.content.startsWith('!')) return;
 
       const date = new Date(msg.createdTimestamp);
-      const formattedDate = `${date.getFullYear()} ${formatNumber(date.getMonth()+1)} ${formatNumber(date.getDate())} ${formatNumber(date.getHours())}:${formatNumber(date.getMinutes())}:${formatNumber(date.getSeconds())}`;
+
+      const formattedDate = dtformat(date)[0];
+      const formattedTime = dtformat(date)[1];
 
       if (msg.author.bot) {
         var req = msg.content;
@@ -304,43 +355,47 @@ client.on('messageCreate', async (message) => {
         //TODO: REPLY?
         conversationLog.push({
           role: 'assistant',
-          content: "Chiara (date: "+formattedDate+"): " + req,
+          content: currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): " + req,
         });
 
 		var c = remGPT(msg.content);
 		
-        if (!c.startsWith("Chiara: ")) {
-          c_history += "Chiara: ";
+        if (!c.startsWith(currentCharacter().name+": ")) {
+          c_history += currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): ";
         }
         c_history += c + "\n";
       }
-      else {
-        if (message == msg) {
-          var req = character() + msg.content;
-        }
-        else {
-          var req = msg.content;
-        }
+      else if (message !== msg) {
+        var req = msg.content;
 
         const nick = msg.member ? msg.member.displayName : null;
 
         //TODO: REPLY?
         conversationLog.push({
           role: 'user',
-          content: nick + ": " + req,
+          content: nick + " (date: "+formattedDate+" time:"+formattedTime+" ): " + req,
         });
 
-        c_history += nick + " (date: "+formattedDate+"): " + msg.content + "\n";
+        c_history += nick + " (date: "+formattedDate+" time:"+formattedTime+"): " + msg.content + "\n";
       }
 
     });
 
-    tasks.push(new AITask(message.author, model));
+    tasks.push(new AITask(message.author, model, currentCharacter()));
     var ctask = tasks.length - 1;
 
     console.log("#" + ctask + " started with model " + tasks[ctask].model + " requested by " + tasks[ctask].user + "; direct prompt length: " + message.content.length);
 
     // const to = await getTalkingTo(message.author.username, c_history, model);
+
+    // latest message
+    const l_req = rtmPlaceholders([]) + currentCharacter().def + message.content;
+    const l_nick = message.member ? message.member.displayName : null;
+    const l_date = new Date(message.createdTimestamp);
+    const l_formattedDate = dtformat(l_date)[0];
+    const l_formattedTime = dtformat(l_date)[1];
+    conversationLog.push({ role: 'user', content: l_nick + " (date: "+l_formattedDate+" time:"+l_formattedTime+" ): " + l_req, });
+    c_history += l_nick + " (date: "+l_formattedDate+" time:"+l_formattedTime+"): " + message.content + "\n";
 
     const result = await reqRes(conversationLog, tasks[ctask].model);
 
@@ -361,7 +416,19 @@ client.on('messageCreate', async (message) => {
         break;
       default:
         if (!tasks[ctask].finished) {
-          message.reply(remGPT(result.data.choices[0].message.content)).catch((error) => { console.log(`DC ERR: ${error}`); });
+          const sum = summary(result.data.choices[0].message.content);
+
+          await message.reply(remGPT(sum[0])).catch((error) => { console.log(`DC ERR: ${error}`); });
+
+          message.channel.messages.fetch({ limit: 1 }).then(messages => {
+            let lastMessage = messages.first();
+
+            client.channels.cache.get(CHANNEL_SUM_ID).send(lastMessage.id+"@"+currentCharacter().name + ": "+sum[1]);
+
+          }).catch(console.error);
+
+          currentCharacter().postRequest();
+
           var exit_code = "0";
         }
     }
@@ -372,6 +439,7 @@ client.on('messageCreate', async (message) => {
 
   } catch (error) {
     console.log(`ERROR: ${error}`);
+    console.log(error.stack)
   }
 });
 
