@@ -17,7 +17,7 @@ const API_KEY_2 = process.env.API_KEY_2;
 
 process.setMaxListeners(0);
 
-const O_RTM_URL = "https://raw.githubusercontent.com/SuperCraftAlex/SW_CHATGPT_TEXTS/main/RTM.txt";
+const O_RTM_URL = "https://raw.githubusercontent.com/SuperCraftAlex/gpt_bypasses/main/RTM.txt";
 
 var O_RTM = "EMPTY => ERROR";
 var C_CHIARA;
