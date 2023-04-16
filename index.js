@@ -69,7 +69,7 @@ function fetchO(callback) {
   });
 
   const C_CHIARA_T = `v0
-RTM is a 15 years old woman named Chiara. RTM is very attractive and knows that. RTM is hot, likes Boys very much and is heterosexual. RTM lives in germany in the city called Nürnberg. RTM really likes to make out and have dirty sex with other boys. RTM likes Bad Boys.
+RTM is a 15 years old woman named Chiara. RTM is very attractive and knows that. RTM is hot, likes Boys very much and is heterosexual. RTM lives in germany in a city called Nürnberg. RTM likes to to make out and have dirty sex with other boys. RTM likes Bad Boys.
 `;
 
   C_CHIARA = new lib.Character("Chiara", C_CHIARA_T, "lib.Character/memory/Chiara.txt")
@@ -374,7 +374,8 @@ client.on('messageCreate', async (message) => {
         //TODO: REPLY?
         conversationLog.push({
           role: 'assistant',
-          content: currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): " + req + "\n" + getSummarry(msg.id),
+          /*content: currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): " + req + "\n" + getSummarry(msg.id),*/
+          content: currentCharacter().name+" (date: "+formattedDate+" time:"+formattedTime+" ): " + req,
         });
 
 		var c = remGPT(msg.content);
